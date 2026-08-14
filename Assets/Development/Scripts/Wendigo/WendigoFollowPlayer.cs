@@ -16,7 +16,13 @@ public class WendigoFollowPlayer : MonoBehaviour
     public float retreatDistance;
     public SoundManager soundManager;
     public bool justSpawned;
-    private float repathInterval = 0.15f;
+    [Header("Repath Tuning")]
+    [Tooltip("Repath interval used when the player is at/beyond farDistance.")]
+    public float farRepathInterval = 0.15f;
+    [Tooltip("Repath interval used when the player is at/within closeDistance. Higher than farRepathInterval so close-range angular swings don't cause constant re-steering.")]
+    public float closeRepathInterval = 0.4f;
+    public float closeDistance = 4f;
+    public float farDistance = 15f;
     private float nextRepath;
     private Transform target;
     private Vector3 playerVelocity;
@@ -71,9 +77,15 @@ public class WendigoFollowPlayer : MonoBehaviour
     public void FollowPlayer()
     {
         selectedRetreat = null;
-        target = player.transform;            
-        if (Time.time < nextRepath) return;   
-        nextRepath = Time.time + repathInterval;
+        target = player.transform;
+        if (Time.time < nextRepath) return;
+
+        // Repath less often up close - at short range small player movements swing the
+        // approach angle fast, and repathing into every swing is what produces the orbiting.
+        float distanceToTarget = Vector3.Distance(transform.position, target.position);
+        float distanceT = Mathf.InverseLerp(closeDistance, farDistance, distanceToTarget);
+        float dynamicRepathInterval = Mathf.Lerp(closeRepathInterval, farRepathInterval, distanceT);
+        nextRepath = Time.time + dynamicRepathInterval;
 
         // === predictive intercept ===
         Vector3 toTarget = target.position - transform.position;
@@ -160,18 +172,18 @@ public class WendigoFollowPlayer : MonoBehaviour
         }
     }
     public void Retreat()
-    {   
-
-        foreach(GameObject spot in retreatPositions)
+    {
+        selectedRetreat = null;
+        float bestDistance = -1f;
+        foreach (GameObject spot in retreatPositions)
         {
-            float distance = Vector3.Distance(spot.transform.position, transform.position);
-            if (distance >= retreatDistance)
+            float distance = Vector3.Distance(spot.transform.position, player.transform.position);
+            if (distance > bestDistance)
             {
+                bestDistance = distance;
                 selectedRetreat = spot;
-                break;
             }
         }
-    
     }
 
     void Update()

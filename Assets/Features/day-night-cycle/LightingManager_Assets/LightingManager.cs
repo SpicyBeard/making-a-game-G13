@@ -1,6 +1,215 @@
+// using System.Collections.Generic;
+// using UnityEngine;
+// using UnityEngine.Rendering;
+
+// namespace Sydewa
+// {
+// [ExecuteAlways]
+// public class LightingManager : MonoBehaviour, IDataPersistence
+// {
+//     #region Parameters
+
+//     [Header("Sun")]
+//     [SerializeField] private Light SunDirectionalLight;
+//     public float sunYAngle = 170f;
+//     public float dayLightIntensity = 1.2f;
+
+//     [Space(5)]
+//     [Header("Ambient")]
+//     public Color dayAmbientColor = new Color(0.35f, 0.35f, 0.35f);
+//     public Color nightAmbientColor = Color.black;
+
+//     [Space(5)]
+//     [Header("Fog")]
+//     public Color dayFogColor = new Color(0.4f, 0.4f, 0.4f);
+//     public Color nightFogColor = Color.black;
+//     [Range(0f, 0.1f)] public float dayFogDensity = 0.015f;
+//     [Range(0f, 0.1f)] public float nightFogDensity = 0.003f;
+
+//     [Space(5)]
+//     [Header("Skybox")]
+//     public Material daySkyboxMaterial;
+//     public Material nightSkyboxMaterial;
+//     private Material _activeSkybox;
+
+//     [Space(5)]
+//     [Header("Moon")]
+//     public bool IsMoonActive;
+//     public Light MoonDirectionalLight;
+//     [Range(0f, 1f)] public float moonNightIntensity = 0.05f;
+
+//     [Space(10)]
+//     [Header("Day Cycle")]
+//     public bool IsDayCycleOn = true;
+//     public bool RandomStartTime;
+//     [Range(0, 24)] public float TimeOfDay = 12f;
+//     [Range(0, 24)] public float StartTime = 12f;
+//     public float CycleDuration = 360f;
+//     [Range(1, 1200)] public float DayCycleDuration = 80f;
+//     [Range(1, 1200)] public float nightCycleDuration = 240f;
+
+//     [Space(10)]
+//     [Header("Events")]
+//     public bool IsEventsOn;
+//     public List<EventInfo> events;
+//     [SerializeField] private float eventsTolerance = 0.2f;
+//     [SerializeField][Range(0f, 24f)] private float ResetEventsTime = 0.1f;
+//     private bool DayCycleCompleted;
+
+//     #endregion
+
+//     private void Awake()
+//     {
+//         RenderSettings.ambientMode = AmbientMode.Flat;
+//         RenderSettings.fog = true;
+//         RenderSettings.fogMode = FogMode.ExponentialSquared;
+
+//         TimeOfDay = RandomStartTime ? Random.Range(0f, 24f) : StartTime % 24f;
+
+//         if (IsEventsOn) ResetEvents();
+//     }
+
+//     public void loadData(GameData data)
+//     {
+//         TimeOfDay = data.timeOfDay;
+//     }
+
+//     public void saveData(ref GameData data)
+//     {
+//         data.timeOfDay = TimeOfDay;
+//     }
+
+//     private void Update()
+//     {
+//         if (Application.isPlaying)
+//         {
+//             if (IsDayCycleOn)
+//             {
+//                 // Freeze time near midnight when lure is crafted
+//                 if (GameManager.instance != null && GameManager.instance.lureCrafted
+//                     && TimeOfDay >= 0f && TimeOfDay <= 1f)
+//                 {
+//                     CycleDuration = 1000f;
+//                     TimeOfDay = 0f;
+//                 }
+
+//                 // Smoothly ramp cycle speed: slow during night, fast during day
+//                 bool isNightNow = GameManager.instance != null && GameManager.instance.isNight;
+//                 if (isNightNow && CycleDuration < nightCycleDuration)
+//                     CycleDuration += 6;
+//                 else if (!isNightNow && CycleDuration > DayCycleDuration)
+//                     CycleDuration -= 6;
+
+//                 TimeOfDay += (Time.deltaTime / CycleDuration) * 24f;
+//                 TimeOfDay %= 24f;
+//             }
+//         }
+
+//         UpdateLighting();
+
+//         if (IsEventsOn) HandleEvents();
+//     }
+
+//     private void UpdateLighting()
+//     {
+//         if (SunDirectionalLight == null) return;
+
+//         // Rotate sun on X: noon (TimeOfDay=12) → pointing straight down, midnight → pointing straight up
+//         float timePercent = TimeOfDay / 24f;
+//         SunDirectionalLight.transform.rotation = Quaternion.Euler(timePercent * 360f - 90f, sunYAngle, 0f);
+
+//         // sunHeight: -1 = midnight (below horizon), 0 = horizon, 1 = noon (above horizon)
+//         float sunHeight = -SunDirectionalLight.transform.forward.y;
+//         bool aboveHorizon = sunHeight > 0f;
+
+//         // Drive isNight from sun position
+//         if (GameManager.instance != null)
+//             GameManager.instance.isNight = !aboveHorizon;
+
+//         // Sun intensity: 0 below horizon, rises naturally with sun height
+//         SunDirectionalLight.intensity = aboveHorizon ? Mathf.Clamp01(sunHeight) * dayLightIntensity : 0f;
+
+//         // Ambient: smooth blend around horizon (-0.2 to 0.2 range gives a nice dusk/dawn window)
+//         float ambientT = Mathf.Clamp01((sunHeight + 0.2f) / 0.4f);
+//         RenderSettings.ambientLight = Color.Lerp(nightAmbientColor, dayAmbientColor, ambientT);
+
+//         // Fog: blend based on sun height
+//         float fogT = Mathf.Clamp01((sunHeight + 0.3f) / 0.6f);
+//         RenderSettings.fogColor = Color.Lerp(nightFogColor, dayFogColor, fogT);
+//         RenderSettings.fogDensity = Mathf.Lerp(nightFogDensity, dayFogDensity, fogT);
+//         if(GameManager.instance != null)
+//             {
+//                 if (GameManager.instance.holdingtorch)
+//                 {
+//                     RenderSettings.fogDensity -= 0.03f;
+//                 }
+//                 if(GameManager.instance.emberstoneactive)
+//                 {
+//                     RenderSettings.fogDensity -= 0.009f;
+//                 }
+                
+//             }
+
+//         // Skybox: switch at midnight
+//         SetSkybox(aboveHorizon ? daySkyboxMaterial : nightSkyboxMaterial);  
+
+//         // Moon: always directly opposite the sun
+//         if (IsMoonActive && MoonDirectionalLight != null)
+//         {
+//             MoonDirectionalLight.transform.rotation = Quaternion.LookRotation(-SunDirectionalLight.transform.forward);
+//             MoonDirectionalLight.intensity = aboveHorizon ? 0f : moonNightIntensity;
+//         }
+//     }
+
+//     private void SetSkybox(Material mat)
+//     {
+//         if (mat == null || mat == _activeSkybox) return;
+//         _activeSkybox = mat;
+//         RenderSettings.skybox = mat;
+//         DynamicGI.UpdateEnvironment();
+//     }
+
+//     public void ResetEvents()
+//     {
+//         foreach (var e in events)
+//             e.executed = false;
+//     }
+
+//     private void HandleEvents()
+//     {
+//         foreach (var eventInfo in events)
+//         {
+//             if (Mathf.Abs(eventInfo.Time - TimeOfDay) <= eventsTolerance && !eventInfo.executed)
+//             {
+//                 eventInfo.executed = true;
+//                 eventInfo.Event.Invoke();
+//                 Debug.Log("Event: " + eventInfo.eventName);
+//             }
+//         }
+
+//         if (!DayCycleCompleted && TimeOfDay < ResetEventsTime)
+//         {
+//             DayCycleCompleted = true;
+//             ResetEvents();
+//             Debug.Log("Day completed + reset");
+//         }
+//         else if (TimeOfDay > ResetEventsTime)
+//         {
+//             DayCycleCompleted = false;
+//         }
+//     }
+
+//     private void OnValidate()
+//     {
+//         if (SunDirectionalLight == null && RenderSettings.sun != null)
+//             SunDirectionalLight = RenderSettings.sun;
+//     }
+// }
+// }
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Rendering;
 //using UnityEngine.Events;
 
 namespace Sydewa
@@ -14,7 +223,7 @@ public class LightingManager : MonoBehaviour, IDataPersistence
     #region Parameters
         //Scene References
         [SerializeField] private Light SunDirectionalLight;
-        [SerializeField] private LightingPreset Preset;
+        // [SerializeField] private LightingPreset Preset;
 
         //Rotation axis
         public enum RotationAxis{X,Y}
@@ -39,6 +248,15 @@ public class LightingManager : MonoBehaviour, IDataPersistence
         public Vector2 afterNoonInterval = new Vector2(0.5f, 1f);
         public Vector2 lightIntensity = new Vector2(0f, 1f);
         private float intensity;
+
+        [Space(5)]
+        [Header("Skybox")]
+        public Material daySkyboxMaterial;
+        public Material nightSkyboxMaterial;
+        [Tooltip("Sun height at which the skybox swaps. Keep <= the fog fully-night point (-0.3) so the swap happens while it's already dark instead of mid-transition.")]
+        public float skyboxSwitchHeight = -0.3f;
+        private Material _activeSkybox;
+
 
         [Space(10)]
 
@@ -77,12 +295,20 @@ public class LightingManager : MonoBehaviour, IDataPersistence
         [SerializeField][Range(0f, 24f)] private float ResetEventsTime = 0.1f;
         private bool DayCycleCompleted;
 
-        public List<Material> fogMaterials;
+        [Space(10)]
+        [Header("Fog")]
+        public Color dayFogColor = new Color(0.4f, 0.4f, 0.4f);
+        public Color nightFogColor = Color.black;
+        [Range(0f, 0.1f)] public float dayFogDensity = 0.015f;
+        [Range(0f, 0.1f)] public float nightFogDensity = 0.003f;
 
     #endregion
 
         private void Awake()
         {
+            RenderSettings.fog = true;
+            RenderSettings.fogMode = FogMode.ExponentialSquared;
+
             if(IsDayCycleOn)
             {
                 if(RandomStartTime)
@@ -142,8 +368,8 @@ public class LightingManager : MonoBehaviour, IDataPersistence
             }
 
 
-            if (Preset == null)
-                return;
+            // if (Preset == null)
+            //     return;
 
             if (Application.isPlaying)
             {
@@ -198,6 +424,14 @@ public class LightingManager : MonoBehaviour, IDataPersistence
             }
         }
 
+        private void SetSkybox(Material mat)
+        {
+            if (mat == null || mat == _activeSkybox) return;
+            _activeSkybox = mat;
+            RenderSettings.skybox = mat;
+            DynamicGI.UpdateEnvironment();
+        }
+
         //This function is called whenever we want to reset all events
         public void ResetEvents()
         {
@@ -210,13 +444,13 @@ public class LightingManager : MonoBehaviour, IDataPersistence
         private void UpdateLighting(float timePercent)
         {
             //Set ambient and fog
-            RenderSettings.ambientLight = Preset.AmbientColor.Evaluate(timePercent);
-            RenderSettings.fogColor = Preset.FogColor.Evaluate(timePercent);
+            // RenderSettings.ambientLight = Preset.AmbientColor.Evaluate(timePercent);
+            // RenderSettings.fogColor = Preset.FogColor.Evaluate(timePercent);
 
             //If the directional light is set then rotate and set it's color, I actually rarely use the localRotation because it casts tall shadows unless you clamp the value
             if (SunDirectionalLight != null)
             {
-                SunDirectionalLight.color = Preset.DirectionalColor.Evaluate(timePercent);
+                // SunDirectionalLight.color = Preset.DirectionalColor.Evaluate(timePercent);
 
                 Vector3 rotationEuler = Vector3.zero;
 
@@ -231,6 +465,22 @@ public class LightingManager : MonoBehaviour, IDataPersistence
                 }
                 SunDirectionalLight.transform.rotation = Quaternion.Euler(rotationEuler);
 
+                // Fog: blend based on sun height (-1 = midnight, 0 = horizon, 1 = noon), gives a much darker night than the timePercent-driven fog did
+                float sunHeight = -SunDirectionalLight.transform.forward.y;
+                float fogT = Mathf.Clamp01((sunHeight + 0.3f) / 0.6f);
+                RenderSettings.fogColor = Color.Lerp(nightFogColor, dayFogColor, fogT);
+                RenderSettings.fogDensity = Mathf.Lerp(nightFogDensity, dayFogDensity, fogT);
+                if (GameManager.instance != null)
+                {
+                    if (GameManager.instance.holdingtorch && GameManager.instance.isNight)
+                        RenderSettings.fogDensity -= 0.03f;
+                    if (GameManager.instance.emberstoneactive && GameManager.instance.isNight)
+                        RenderSettings.fogDensity -= 0.009f;
+                    RenderSettings.fogDensity = Mathf.Max(0f, RenderSettings.fogDensity);
+                }
+
+                // Skybox: swap once fog is already fully in its night state, so the swap is hidden in darkness
+                SetSkybox(sunHeight > skyboxSwitchHeight ? daySkyboxMaterial : nightSkyboxMaterial);
 
                 //Changes light intensity (and a shader parameter) depending on timePercent
                 if (timePercent < morningInterval.x || timePercent > afterNoonInterval.y)
@@ -270,19 +520,21 @@ public class LightingManager : MonoBehaviour, IDataPersistence
                     _shadowStrength = Mathf.Lerp(0f, shadowStrength, afternoonNormalizedTime);
                 }
 
-                // Set light intensity and shadow strength
-                SunDirectionalLight.intensity = intensity;
+                // Set light intensity and shadow strength - hard gate off sunHeight so the light is
+                // truly off below the horizon, regardless of how the morning/afternoon intervals are tuned
+                bool sunAboveHorizon = sunHeight > 0f;
+                SunDirectionalLight.intensity = sunAboveHorizon ? intensity : 0f;
+                SunDirectionalLight.enabled = sunAboveHorizon;
                 if (IsShadowChangeOn)
-                    SunDirectionalLight.shadowStrength = _shadowStrength;
+                    SunDirectionalLight.shadowStrength = sunAboveHorizon ? _shadowStrength : 0f;
 
                 // Set skybox parameter
                 if(IsSkyBoxOn)
                 {
                     skyboxMat.SetFloat(customPropertyName, skyboxParam);
                 }
-            
+
             }
-            UpdateFogMaterials(timePercent);
         }
 
         private void UpdateMoonLighting(float timePercent)
@@ -377,26 +629,5 @@ public class LightingManager : MonoBehaviour, IDataPersistence
             }
 
         }
-
-    private void UpdateFogMaterials(float timePercent)
-    {
-        // Evaluate current fog color from gradient
-        float nightFactor = 1f - Mathf.Cos(timePercent * Mathf.PI * 2f); // Peaks at midnight
-        Color baseFog = Preset.FogColor.Evaluate(timePercent);
-        Color darkerFog = Color.Lerp(Color.black, baseFog, nightFactor * 0.5f); // Adjust blend factor
-
-
-        foreach (var mat in fogMaterials)
-        {
-            if (mat != null)
-            {
-                // Get the original alpha from the material
-                Color originalColor = mat.GetColor("_FogColor");
-                darkerFog.a = originalColor.a;
-
-                mat.SetColor("_FogColor", darkerFog);
-            }
-        }
-    }
     }
 }

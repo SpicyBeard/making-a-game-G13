@@ -26,6 +26,7 @@ public class WendigoStateMachine : MonoBehaviour
 
     void SetNewState(WendigoBehaviour newState)
     {
+        if (nextState == newState) return;
         nextState = newState;
         if (activeState)
         {

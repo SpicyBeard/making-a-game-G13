@@ -27,6 +27,8 @@ public class WendigoChasing : WendigoBehaviour
     private float internalTimer = 0.0f;
     public Animator myAnimator;
     public Transform caveChaseSpot;
+    public float retreatTimeout = 8f;
+    private float retreatTimer = 0f;
     public Transform finalChaseSpot;
 
     private void Start()
@@ -44,6 +46,7 @@ public class WendigoChasing : WendigoBehaviour
         SpawnBehindPlayer();
         spawnBehindTimer = spawnBehindCooldown;
         isRetreating = false;
+        retreatTimer = 0f;
     }
 
     public override void Run()
@@ -122,40 +125,26 @@ public class WendigoChasing : WendigoBehaviour
         else if (isEnding)
         {
             searchTime = 0;
+            retreatTimer += Time.deltaTime;
+
             if (!isRetreating)
             {
                 wendigoFollowPlayer.Retreat();
-            }
-            if (wendigoFollowPlayer.selectedRetreat != null)
-            {
-                isRetreating = true;
-
-                agent.SetDestination(wendigoFollowPlayer.selectedRetreat.transform.position);
-
-                if (Vector3.Distance(transform.parent.transform.position, wendigoFollowPlayer.selectedRetreat.transform.position) <= 5f)
+                if (wendigoFollowPlayer.selectedRetreat != null)
                 {
-                    Debug.Log("DISSAPEARS");
-                    // agent.enabled = false;
-                    agent.enabled = false;
-                    transform.parent.transform.position = wendigoSpawnPointTracker.despawnPoint.transform.position;
-                    // isRetreating = true;
-                    isEnding = false;
-
+                    agent.SetDestination(wendigoFollowPlayer.selectedRetreat.transform.position);
                 }
-
-            }
-            if (wendigoFollowPlayer.selectedRetreat == null)
-            {
                 isRetreating = true;
-                wendigoFollowPlayer.selectedRetreat = caveChaseSpot.gameObject;
             }
-            
-            // if (Vector3.Distance(transform.parent.transform.position, wendigoRaycasts.target.transform.position) >= 20f)
-            // {
-            //     transform.parent.transform.position = wendigoSpawnPointTracker.despawnPoint.transform.position;
-            //     // isRetreating = true;
-            //     isEnding = false;
-            // }
+
+            if (retreatTimer >= retreatTimeout)
+            {
+                Debug.Log("DISSAPEARS");
+                agent.enabled = false;
+                transform.parent.transform.position = wendigoSpawnPointTracker.despawnPoint.transform.position;
+                retreatTimer = 0f;
+                isEnding = false;
+            }
         }
     }
 

@@ -7,7 +7,7 @@ public class PlayerInteractHandler : MonoBehaviour
 {
     [Header("Raycast variables")]
     [Tooltip("Length of interact raycast, increase for the player to have longer reach.")]
-    public float raycastlength = 3;
+    public float raycastlength = 5;
     [Tooltip("The gameobject in the scene which has the PlayerInventory script. Required for the script to function.")]
     public GameObject playerinventoryobject;
 
